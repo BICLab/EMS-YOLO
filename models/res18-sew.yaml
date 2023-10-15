@@ -1,0 +1,34 @@
+nc: 80  # number of classes
+depth_multiple: 1.0  # model depth multiple
+width_multiple: 1.0  # layer channel multiple
+anchors:
+  - [10,14, 23,27, 37,58]  # P4/16
+  - [81,82, 135,169, 344,319]  # P5/32
+
+# YOLOv3-tiny backbone
+backbone:
+  # [from, number, module, args]
+  [[-1, 1, Conv, [32, 3, 2]],  # 0
+   [-1, 1, BasicBlock, [64, 3,2]],  # 1-P2/4
+   [-1, 1, BasicBlock, [64, 3, 1]],
+   [-1, 1, BasicBlock, [128,3,2]],  # 2-P3/8  
+   [-1, 1, BasicBlock, [128, 3, 1]],
+   [-1, 1, BasicBlock, [256,3,2]],  # 3-P4/16
+   [-1, 1, BasicBlock, [256, 3, 1]],
+   [-1, 1, BasicBlock, [512,3,2]],  # 4-P5/32
+   [-1, 1, BasicBlock, [512, 3, 1]],
+
+  ]
+
+# YOLOv3-tiny head
+head:
+  [[-1, 1, BasicBlock, [256, 3, 1]], #9
+   [-1, 1, BasicBlock, [512, 3, 1]],  # 10 (P5/32-large)
+
+   [-2, 1, BasicBlock, [128, 1, 1]],
+   [-1, 1, Sample, [None, 2, 'nearest']],
+   [[-1, 6], 1, Concat, [2]],  # cat backbone P4
+   [-1, 1, BasicBlock, [256, 3, 1]],  # 14 (P4/16-medium)
+
+   [[14, 10], 1, Detect, [nc, anchors]],  # Detect(P4, P5)
+  ]

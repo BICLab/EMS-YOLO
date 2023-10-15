@@ -1,0 +1,12 @@
+path: ../../testATIS  # dataset root dir gen1 data need preprocess
+train: train # train images (relative to 'path') 128 images
+val: val  # val images (relative to 'path') 128 images
+test: test  # test images (optional)
+
+# Classes
+nc: 2  # number of classes
+names: ['car','persidian']  # class names
+
+
+# Download script/URL (optional)
+
