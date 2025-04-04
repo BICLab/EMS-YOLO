@@ -62,6 +62,13 @@ Dependencies can be downloaded from [Visualizer](https://github.com/luo3300612/V
 python calculate_fr.py
 ```
 
+
+### Supplementary Note
+When running on the COCO dataset, make sure to modify line 118 in the yolo.py file to:
+
+m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
+
+
 ### Contact Information
 
 
