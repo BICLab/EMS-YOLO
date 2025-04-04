@@ -127,10 +127,13 @@ class Model(nn.Module):
         LOGGER.info('')
 
     def forward(self, x, augment=False, profile=False, visualize=False):
-        input = torch.zeros(time_window, x.size()[0], x.size()[1], x.size()[2], x.size()[3], device=x.device)
-        for i in range(time_window):
-            input[i] = x
-            
+        # input = torch.zeros(time_window, x.size()[0], x.size()[1], x.size()[2], x.size()[3], device=x.device)
+        # for i in range(time_window):
+        #     input[i] = x
+
+        # if augment:
+        #     return self._forward_augment(x)  # augmented inference, None
+        input = x.permute(1,0,2,3,4).contiguous()
         if augment:
             return self._forward_augment(input)  # augmented inference, None
     

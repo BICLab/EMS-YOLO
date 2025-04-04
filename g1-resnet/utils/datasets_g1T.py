@@ -390,8 +390,9 @@ def img2label_paths(img_paths):
 
 
 def g1_img2labelpaths(img_paths):
-    return ['/'.join(x.split('/')[:-1])+'/label'+str(x.split('/')[-1][3:])  for x in img_paths]
-
+    #return ['/'.join(x.split('/')[:-1])+'/label'+str(x.split('/')[-1][3:])  for x in img_paths]
+    #print(x[-3]+'txt' for x in img_paths)
+    return [ x[:-3]+'txt' for x in img_paths]
 
 
 
@@ -406,7 +407,7 @@ class LoadImagesAndLabels(Dataset):
         self.quantized_h = self.h // self.quantization_size[2]#240
         self.T=T
         save_file_name = path+'.txt'
-        f = []
+        f =[]
         with open(save_file_name) as t:
             t = t.read().strip().splitlines()
             f += [x for x in t]
@@ -498,7 +499,8 @@ class LoadImagesAndLabels(Dataset):
         return x    
     
     def __len__(self):
-        return len(self.img_files)#
+        return len(self.indices)
+        #return len(self.img_files)#
     
 
     def __getitem__(self, index):
@@ -527,7 +529,7 @@ class LoadImagesAndLabels(Dataset):
             out_img = np.zeros([5,320,320,3])
             for i in range(5):
             # for j in range(sample.shape[1]):
-                out_img[i] = cv2.resize(im[i],(320,320))
+                out_img[i] = cv2.resize(im[0],(320,320))
             #del im
             out_img = np.transpose(out_img,[0,3,1,2])
             return out_img  # im, hw_original, hw_resized
@@ -552,7 +554,8 @@ def verify_image_label(args):
         # verify labels
         if os.path.isfile(lb_file):
             nf = 1  # label found
-            lb = np.load(lb_file)#, dtype=np.float32)
+            lb = np.loadtxt(lb_file)#, dtype=np.float32)
+            #np.loadtxt
             nl = len(lb)
             if nl:
                 assert lb.shape[1] == 5, f'labels require 5 columns, {lb.shape[1]} columns detected'
