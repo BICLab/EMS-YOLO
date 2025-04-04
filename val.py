@@ -3,7 +3,7 @@
 Validate a trained  model accuracy on a custom dataset
 
 Usage:
-    $ python path/to/val.py --data coco128.yaml --weights yolov3.pt --img 640
+    $ python path/to/val.py --data coco128.yaml --weights ***.pt --img 640
 """
 
 import argparse
@@ -22,16 +22,21 @@ ROOT = FILE.parents[0]  # root directory
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))  # add ROOT to PATH
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
-
+'''
+from visualizer import get_local
+get_local.activate()
+'''
 from models.common import DetectMultiBackend
 from utils.callbacks import Callbacks
-from utils.datasets import create_dataloader
+from utils.datasets_g1T import create_dataloader
 from utils.general import (LOGGER, NCOLS, box_iou, check_dataset, check_img_size, check_requirements, check_yaml,
                            coco80_to_coco91_class, colorstr, increment_path, non_max_suppression, print_args,
                            scale_coords, xywh2xyxy, xyxy2xywh)
 from utils.metrics import ConfusionMatrix, ap_per_class
 from utils.plots import output_to_target, plot_images, plot_val_study
 from utils.torch_utils import select_device, time_sync
+
+
 
 def save_one_txt(predn, save_conf, shape, file):
     # Save one txt result
@@ -83,10 +88,10 @@ def process_batch(detections, labels, iouv):
 def run(data,
         weights=None,  # model.pt path(s)
         batch_size=32,  # batch size
-        imgsz=640,  # inference size (pixels)
+        imgsz=320,  # inference size (pixels)
         conf_thres=0.001,  # confidence threshold
         iou_thres=0.6,  # NMS IoU threshold
-        task='val',  # train, val, test, speed or study
+        task='test',  # train, val, test, speed or study
         device='',  # cuda device, i.e. 0 or 0,1,2,3 or cpu
         single_cls=False,  # treat as single-class dataset
         augment=False,  # augmented inference
@@ -95,7 +100,7 @@ def run(data,
         save_hybrid=False,  # save label+prediction hybrid results to *.txt
         save_conf=False,  # save confidences in --save-txt labels
         save_json=False,  # save a COCO-JSON results file
-        project=ROOT / 'runs/val',  # save to project/name
+        project=ROOT / 'runs/test',  # save to project/name
         name='exp',  # save to project/name
         exist_ok=False,  # existing project/name ok, do not increment
         half=False,  # use FP16 half-precision inference
@@ -106,6 +111,8 @@ def run(data,
         plots=True,
         callbacks=Callbacks(),
         compute_loss=None,
+        image_shape=(240,304),
+        T=5
         ):
     # Initialize/load model and set device
     training = model is not None
@@ -128,7 +135,6 @@ def run(data,
         imgsz = check_img_size(imgsz, s=stride)  # check image size
         half &= pt and device.type != 'cpu'  # half precision only supported by PyTorch on CUDA
         if pt:
-            print('----2执行')#执行这里
             model.model.half() if half else model.model.float()
         else:
             half = False
@@ -137,42 +143,46 @@ def run(data,
             LOGGER.info(f'Forcing --batch-size 1 square inference shape(1,3,{imgsz},{imgsz}) for non-PyTorch backends')
 
         # Data
-        data = check_dataset(data)  # check
+        #data = check_dataset(data)  # check
 
     # Configure
     model.eval()
-    is_coco = isinstance(data.get('val'), str) and data['val'].endswith('coco/val2017.txt')  # COCO dataset
-    nc = 1 if single_cls else int(data['nc'])  # number of classes
+    is_coco = False
+    nc = 2  # number of classes
     iouv = torch.linspace(0.5, 0.95, 10).to(device)  # iou vector for mAP@0.5:0.95
     niou = iouv.numel()
 
-    # Dataloader
+
+    
     if not training:
+        print('val  not training model has been used')
         if pt and device.type != 'cpu':
             model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.model.parameters())))  # warmup
         pad = 0.0 if task == 'speed' else 0.5
         task = task if task in ('train', 'val', 'test') else 'val'  # path to train/val/test images
-        dataloader = create_dataloader(data[task], imgsz, batch_size, stride, single_cls, pad=pad, rect=pt,
-                                       prefix=colorstr(f'{task}: '))[0]
-
     seen = 0
     confusion_matrix = ConfusionMatrix(nc=nc)
-    names = {k: v for k, v in enumerate(model.names if hasattr(model, 'names') else model.module.names)}#coco里面所有的名字
+    names = {k: v for k, v in enumerate(model.names if hasattr(model, 'names') else model.module.names)}#
     class_map = coco80_to_coco91_class() if is_coco else list(range(1000))
     s = ('%20s' + '%11s' * 6) % ('Class', 'Images', 'Labels', 'P', 'R', 'mAP@.5', 'mAP@.5:.95')
     dt, p, r, f1, mp, mr, map50, map = [0.0, 0.0, 0.0], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
     loss = torch.zeros(3, device=device)
     jdict, stats, ap, ap_class = [], [], [], []
+    '''
+    FR=[]
+    get_local.clear()
+    '''
     pbar = tqdm(dataloader, desc=s, ncols=NCOLS, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
-    for batch_i, (im, targets, paths, shapes) in enumerate(pbar):
+    for batch_i, (im, targets, paths) in enumerate(pbar):
+        #cache = get_local.cache
         t1 = time_sync()
         if pt:
-            im = im.to(device, non_blocking=True)#这个时候的image恢复为原来的大小？？？范围在0-255之间。
+            im = im.to(device, non_blocking=True)#
             targets = targets.to(device)
         # im = im.half() if half else im.float()  # uint8 to fp16/32
         im = im.float()
         im /= 255  # 0 - 255 to 0.0 - 1.0   #这个变量什么意思
-        nb, _, height, width = im.shape  # batch size, channels, height, width 384,672
+        nb, timewindow, _, height, width = im.shape  # batch size, channels, height, width 384,672
         t2 = time_sync()
         dt[0] += t2 - t1
 
@@ -196,7 +206,7 @@ def run(data,
             labels = targets[targets[:, 0] == si, 1:]
             nl = len(labels)
             tcls = labels[:, 0].tolist() if nl else []  # target class
-            path, shape = Path(paths[si]), shapes[si][0] #shape是原始image的尺寸
+            #path, shape = Path(paths[si]), shapes[si][0]
             seen += 1
 
             if len(pred) == 0:
@@ -208,12 +218,12 @@ def run(data,
             if single_cls:
                 pred[:, 5] = 0
             predn = pred.clone()
-            scale_coords(im[si].shape[1:], predn[:, :4], shape, shapes[si][1])  # native-space pred
+            #scale_coords(im[si].shape[1:], predn[:, :4], shape, shapes[si][1])  # native-space pred
 
             # Evaluate
             if nl:
                 tbox = xywh2xyxy(labels[:, 1:5])  # target boxes
-                scale_coords(im[si].shape[1:], tbox, shape, shapes[si][1])  # native-space labels
+                #scale_coords(im[si].shape[1:], tbox, shape, shapes[si][1])  # native-space labels
                 labelsn = torch.cat((labels[:, 0:1], tbox), 1)  # native-space labels
                 correct = process_batch(predn, labelsn, iouv)
                 if plots:
@@ -222,20 +232,18 @@ def run(data,
                 correct = torch.zeros(pred.shape[0], niou, dtype=torch.bool)
             stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))  # (correct, conf, pcls, tcls)
 
-            # Save/log
-            if save_txt:
-                save_one_txt(predn, save_conf, shape, file=save_dir / 'labels' / (path.stem + '.txt'))
-            if save_json:
-                save_one_json(predn, jdict, path, class_map)  # append to COCO-JSON dictionary
-            callbacks.run('on_val_image_end', pred, predn, path, names, im[si])
-
+            ## Save/log
+            #if save_txt:
+            #    save_one_txt(predn, save_conf, shape, file=save_dir / 'labels' / (path.stem + '.txt'))
+            #if save_json:
+            #    save_one_json(predn, jdict, path, class_map)  # append to COCO-JSON dictionary
+            #callbacks.run('on_val_image_end', pred, predn, path, names, im[si])
         # Plot images
-        if plots and batch_i < 3:
+        if plots and batch_i < 0:
             f = save_dir / f'val_batch{batch_i}_labels.jpg'  # labels
-            Thread(target=plot_images, args=(im, targets, paths, f, names), daemon=True).start()
+            Thread(target=plot_images, aargs=(im[:,timewindow-1,:,:,:], targets, paths, f, names), daemon=True).start()
             f = save_dir / f'val_batch{batch_i}_pred.jpg'  # predictions
-            Thread(target=plot_images, args=(im, output_to_target(out), paths, f, names), daemon=True).start()
-
+            Thread(target=plot_images, args=(im[:,timewindow-1,:,:,:], output_to_target(out), paths, f, names), daemon=True).start()
     # Compute metrics
     stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
     if len(stats) and stats[0].any():
@@ -306,7 +314,7 @@ def run(data,
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', type=str, default=ROOT / 'data/coco.yaml', help='dataset.yaml path')
-    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'runs/train/exp18/weights/best.pt', help='model.pt path(s)')
+    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'runs/train_bk/exp18/weights/best.pt', help='model.pt path(s)')
     parser.add_argument('--batch-size', type=int, default=32, help='batch size')
     parser.add_argument('--imgsz', '--img', '--img-size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.001, help='confidence threshold')
