@@ -30,7 +30,8 @@ try:
     import thop  # for FLOPs computation
 except ImportError:
     thop = None
-time_window= 3
+    
+time_window= 5
 
 class Detect(nn.Module):
     stride = None  # strides computed during build
@@ -114,7 +115,7 @@ class Model(nn.Module):
         if isinstance(m, Detect):
             s = 256  # 2x min stride
             m.inplace = self.inplace
-            m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
+            m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1,time_window, ch, s, s))])  # forward
             m.anchors /= m.stride.view(-1, 1, 1)
             check_anchor_order(m)
             self.stride = m.stride
@@ -126,12 +127,16 @@ class Model(nn.Module):
         LOGGER.info('')
 
     def forward(self, x, augment=False, profile=False, visualize=False):
-        input = torch.zeros(time_window, x.size()[0], x.size()[1], x.size()[2], x.size()[3], device=x.device)
-        for i in range(time_window):
-            input[i] = x
+        # input = torch.zeros(time_window, x.size()[0], x.size()[1], x.size()[2], x.size()[3], device=x.device)
+        # for i in range(time_window):
+        #     input[i] = x
 
+        # if augment:
+        #     return self._forward_augment(x)  # augmented inference, None
+        input = x.permute(1,0,2,3,4).contiguous()
         if augment:
-            return self._forward_augment(x)  # augmented inference, None
+            return self._forward_augment(input)  # augmented inference, None
+    
         return self._forward_once(input, profile, visualize)  # single-scale inference, train
 
     def _forward_augment(self, x):
@@ -275,18 +280,14 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
                 pass
 
         n = n_ = max(round(n * gd), 1) if n > 1 else n  # depth gain
-        if m in [Conv, GhostConv, Bottleneck, GhostBottleneck, SPP, SPPF, DWConv, MixConv2d, Focus, CrossConv,
-                 BottleneckCSP, C3, C3TR, C3SPP, C3Ghost,Conv_2,snn_resnet,
-                 BasicBlock,BasicBlock_1,BasicBlock_2,Conv_A,CSABlock,LIAFBlock,Conv_LIAF,Bottleneck_2,
-                 TCSABlock,BasicTCSA,ConcatBlock_ms,BasicBlock_ms,Conv_1,Concat_res2,HAMBlock,ConcatCSA_res2,BasicBlock_ms1]:
+        if m in [Conv,Conv_2,
+                 BasicBlock,BasicBlock_1,BasicBlock_2,Conv_A
+                 ,ConcatBlock_ms,BasicBlock_ms,Conv_1,Concat_res2]:
             c1, c2 = ch[f], args[0]
             if c2 != no:  # if not output
                 c2 = make_divisible(c2 * gw, 8)
 
             args = [c1, c2, *args[1:]]
-            if m in [BottleneckCSP, C3, C3TR, C3Ghost]:
-                args.insert(2, n)  # number of repeats
-                n = 1
         elif m is nn.BatchNorm2d:
             args = [ch[f]]
         elif m is Concat:
@@ -297,8 +298,6 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
                 args[1] = [list(range(args[1] * 2))] * len(f)
         elif m is Contract:
             c2 = ch[f] * args[0] ** 2
-        elif m is Expand:
-            c2 = ch[f] // args[0] ** 2
         else:
             c2 = ch[f]
 
