@@ -63,10 +63,13 @@ python calculate_fr.py
 ```
 
 
-### Supplementary Note
+### Supplementary Note1
 When running on the COCO dataset, make sure to modify line 118 in the yolo.py file to:
 
 m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
+
+### Supplementary Note2
+The parameter size of ResNet34 was incorrectly reported in the paper; the correct value should be over 30M.
 
 
 ### Contact Information
